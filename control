@@ -1,0 +1,9 @@
+Package: com.doubao.doubaovoicewechat
+Name: 豆包语音 for 微信
+Version: 1.1.0
+Architecture: iphoneos-arm
+Description: 微信里长按文字，用豆包双向流式 TTS 朗读
+Maintainer: doubao
+Author: doubao
+Section: Tweaks
+Depends: mobilesubstrate, firmware (>= 15.0)
