@@ -1,7 +1,7 @@
 #import <Foundation/Foundation.h>
 
 @interface DVAudioPlayer : NSObject
-- (instancetype)initWithSampleRate:(double)rate;
+- (nullable instancetype)initWithSampleRate:(double)rate NS_DESIGNATED_INITIALIZER;
 - (void)start;
 - (void)appendPCM:(NSData *)pcm;
 - (void)finish;
