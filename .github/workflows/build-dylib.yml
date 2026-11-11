@@ -1,0 +1,84 @@
+name: build-dylib
+
+on:
+  push:
+    paths:
+      - "TTS/**"
+      - "UI/**"
+      - "Prefs/**"
+      - "Tweak.xm"
+      - "Makefile"
+      - "control"
+      - "DoubaoVoiceWeChat.plist"
+      - ".github/workflows/build-dylib.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: 1. Checkout
+        uses: actions/checkout@v5
+
+      - name: 2. 环境信息
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-path
+          xcrun --sdk iphoneos --show-sdk-version
+          pwd
+          ls -la
+          test -f Makefile && echo "有 Makefile OK" || echo "!!! 没有 Makefile !!!"
+          test -f Tweak.xm && echo "有 Tweak.xm OK" || echo "!!! 没有 Tweak.xm !!!"
+          test -d TTS && echo "有 TTS/ OK" || echo "!!! 没有 TTS/ !!!"
+
+      - name: 3. 安装 Theos
+        run: |
+          set -e
+          export THEOS=$HOME/theos
+          git clone --recursive --depth 1 https://github.com/theos/theos.git "$THEOS"
+          SDK=$(xcrun --sdk iphoneos --show-sdk-path)
+          mkdir -p "$THEOS/sdks"
+          ln -sfn "$SDK" "$THEOS/sdks/iPhoneOS.sdk"
+          ls -l "$THEOS/sdks"
+          echo "THEOS=$THEOS" >> $GITHUB_ENV
+
+      - name: 4. 安装 ldid
+        run: |
+          brew install ldid || echo "brew ldid 失败，用 Theos 自带的"
+          which ldid || ls -l $HOME/theos/bin/ldid || true
+
+      - name: 5. 编译
+        run: |
+          export PATH="$THEOS/bin:$PATH"
+          make clean || true
+          make package FINALPACKAGE=1 DEBUG=0 2>&1 | tee build.log
+
+      - name: 6. 收集产物
+        if: always()
+        run: |
+          mkdir -p out
+          find . -name "*.dylib" -type f 2>/dev/null | tee dylib-list.txt
+          find . -name "*.deb" -type f 2>/dev/null | tee deb-list.txt
+          if [ -s dylib-list.txt ]; then while IFS= read -r f; do cp -v "$f" out/ ; done < dylib-list.txt; fi
+          if [ -s deb-list.txt ]; then while IFS= read -r f; do cp -v "$f" out/ ; done < deb-list.txt; fi
+          ls -laR out || true
+
+      - name: 7. 上传产物
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: DoubaoVoiceWeChat
+          path: out
+          if-no-files-found: warn
+
+      - name: 8. 上传编译日志
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: build-log
+          path: |
+            build.log
+            dylib-list.txt
+            deb-list.txt
+          if-no-files-found: warn
