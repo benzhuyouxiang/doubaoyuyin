@@ -5,88 +5,64 @@
 #import "TTS/DVTTSEngine.h"
 #import "UI/DVHUD.h"
 #import "UI/DVMenuController.h"
-#import "UI/DVMoreInjector.h"
 #import "Prefs/DVStore.h"
 #import "Prefs/DVSettingsController.h"
 
-#pragma mark - 微信私有类声明（编译期没有头文件）
-
-@interface WCMoreFunctionViewController : UIViewController
-@end
-
-@interface WCMoreViewController : UIViewController
-@end
-
-@interface MMGrowTextView : UIView
-@end
-
-@interface NewMainFrameViewController : UIViewController
-@end
-
 static const void *kDVTapHookedKey = &kDVTapHookedKey;
 
-#pragma mark - 取视图里的文字
+#pragma mark - 取文字
 
 static NSString *dv_text_of(UIView *view) {
     if (!view) return nil;
 
-    if ([view isKindOfClass:[UITextView class]]) {
-        UITextView *tv = (UITextView *)view;
-        NSString *sel = [tv textInRange:tv.selectedTextRange];
-        if (sel.length) return sel;
-        return tv.text;
-    }
-
-    if ([view isKindOfClass:[UITextField class]]) {
-        UITextField *tf = (UITextField *)view;
-        UITextRange *r = tf.selectedTextRange;
-        if (r) {
-            NSString *sel = [tf textInRange:r];
+    @try {
+        if ([view isKindOfClass:[UITextView class]]) {
+            UITextView *tv = (UITextView *)view;
+            NSString *sel = [tv textInRange:tv.selectedTextRange];
             if (sel.length) return sel;
+            return tv.text;
         }
-        return tf.text;
-    }
-
-    if ([view isKindOfClass:[UILabel class]]) {
-        UILabel *lb = (UILabel *)view;
-        if (lb.attributedText.length) return lb.attributedText.string;
-        return lb.text;
-    }
-
-    if ([view respondsToSelector:@selector(text)]) {
-        id t = [view performSelector:@selector(text)];
-        if ([t isKindOfClass:[NSString class]] && [(NSString *)t length]) return t;
-    }
-    if ([view respondsToSelector:@selector(attributedText)]) {
-        id t = [view performSelector:@selector(attributedText)];
-        if ([t isKindOfClass:[NSAttributedString class]]) {
-            NSString *s = [(NSAttributedString *)t string];
-            if (s.length) return s;
+        if ([view isKindOfClass:[UITextField class]]) {
+            UITextField *tf = (UITextField *)view;
+            NSString *t = tf.text;
+            if (t.length) return t;
+            return nil;
         }
+        if ([view isKindOfClass:[UILabel class]]) {
+            UILabel *lb = (UILabel *)view;
+            NSAttributedString *at = lb.attributedText;
+            if (at.length) return at.string;
+            return lb.text;
+        }
+    } @catch (NSException *e) {
+        NSLog(@"[豆包语音] dv_text_of 异常: %@", e.reason);
     }
     return nil;
 }
 
-#pragma mark - 该不该挂长按
+#pragma mark - 判断
 
 static BOOL dv_is_readable_text_view(UIView *view) {
     if (!view) return NO;
     if (view.window == nil) return NO;
 
-    CGRect f = view.frame;
-    if (f.size.height < 10 || f.size.width < 24) return NO;
+    @try {
+        CGRect f = view.frame;
+        if (f.size.height < 10 || f.size.width < 24) return NO;
 
-    NSString *cn = NSStringFromClass([view class]);
-    if ([cn containsString:@"Button"]) return NO;
-    if ([cn containsString:@"NavigationBar"]) return NO;
-    if ([cn containsString:@"TabBar"]) return NO;
-    if ([cn containsString:@"Keyboard"]) return NO;
-    if ([cn containsString:@"SearchBar"]) return NO;
-    if ([cn hasPrefix:@"_UI"]) return NO;
+        NSString *cn = NSStringFromClass([view class]);
+        if ([cn containsString:@"Button"]) return NO;
+        if ([cn containsString:@"NavigationBar"]) return NO;
+        if ([cn containsString:@"TabBar"]) return NO;
+        if ([cn containsString:@"Keyboard"]) return NO;
+        if ([cn containsString:@"SearchBar"]) return NO;
 
-    NSString *txt = dv_text_of(view);
-    if (txt.length < 1) return NO;
-    return YES;
+        NSString *txt = dv_text_of(view);
+        if (txt.length < 1) return NO;
+        return YES;
+    } @catch (NSException *e) {
+        return NO;
+    }
 }
 
 #pragma mark - 挂长按
@@ -108,7 +84,7 @@ static void dv_handle_reader_long_press(UIView *view, UIGestureRecognizer *g) {
 }
 
 static void dv_attach_reader(UIView *view) {
-    if (!DVEnableLongPress()) return;           // 设置页的总开关
+    if (!DVEnableLongPress()) return;
     if (!dv_is_readable_text_view(view)) return;
     if (objc_getAssociatedObject(view, kDVTapHookedKey)) return;
     objc_setAssociatedObject(view, kDVTapHookedKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -122,160 +98,64 @@ static void dv_attach_reader(UIView *view) {
     g.delaysTouchesBegan = NO;
     [view addGestureRecognizer:g];
 
-    NSLog(@"[豆包语音] 已挂长按 → %@", NSStringFromClass([view class]));
+    NSLog(@"[豆包语音] 挂上 → %@", NSStringFromClass([view class]));
 }
 
-#pragma mark - 手势回调
+#pragma mark - 手势
 
 @interface UIView (DVReader)
 - (void)dv_readerLongPress:(UILongPressGestureRecognizer *)g;
 @end
 
 @implementation UIView (DVReader)
-
 - (void)dv_readerLongPress:(UILongPressGestureRecognizer *)g {
-    dv_handle_reader_long_press(self, g);
+    @try {
+        dv_handle_reader_long_press(self, g);
+    } @catch (NSException *e) {
+        NSLog(@"[豆包语音] 长按异常: %@", e.reason);
+    }
 }
-
 @end
 
-#pragma mark - hook: UILabel
+#pragma mark - hook UILabel（只留 didMoveToWindow，删掉 layoutSubviews）
 
 %hook UILabel
 
 - (void)didMoveToWindow {
     %orig;
-    if (!self.window) return;
-    dv_attach_reader(self);
-}
-
-- (void)layoutSubviews {
-    %orig;
-    if (!self.window) return;
-    dv_attach_reader(self);
-}
-
-%end
-
-#pragma mark - hook: UITextView / UITextField
-
-%hook UITextView
-
-- (void)didMoveToWindow {
-    %orig;
-    if (!self.window) return;
-    dv_attach_reader(self);
-}
-
-%end
-
-%hook UITextField
-
-- (void)didMoveToWindow {
-    %orig;
-    if (!self.window) return;
-    dv_attach_reader(self);
-}
-
-%end
-
-#pragma mark - hook: 微信输入框 MMGrowTextView
-
-%hook MMGrowTextView
-
-- (void)didMoveToWindow {
-    %orig;
-    if (!self.window) return;
-    NSLog(@"[豆包语音] 命中微信输入框 MMGrowTextView");
-    dv_attach_reader(self);
-}
-
-- (void)layoutSubviews {
-    %orig;
-    if (!self.window) return;
-    dv_attach_reader(self);
-}
-
-%end
-
-#pragma mark - 加号面板（设置入口）
-
-static void dv_try_install_more(id vcObj) {
-    if (!vcObj) return;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        UIViewController *vc = (UIViewController *)vcObj;
-        if ([vc isKindOfClass:[UIViewController class]]) {
-            [DVMoreInjector installInto:vc];
-        }
-    });
-}
-
-%hook WCMoreFunctionViewController
-
-- (void)viewDidLoad {
-    %orig;
-    dv_try_install_more(self);
-}
-
-%end
-
-%hook WCMoreViewController
-
-- (void)viewDidLoad {
-    %orig;
-    dv_try_install_more(self);
-}
-
-%end
-
-%hook UIViewController
-
-- (void)viewDidLoad {
-    %orig;
-    NSString *cn = NSStringFromClass([self class]);
-    if ([cn containsString:@"DVMore"]) return;
-    if ([cn containsString:@"More"] || [cn containsString:@"Function"] ||
-        [cn containsString:@"Panel"] || [cn containsString:@"Menu"]) {
-        dv_try_install_more(self);
+    @try {
+        if (!self.window) return;
+        dv_attach_reader(self);
+    } @catch (NSException *e) {
+        NSLog(@"[豆包语音] UILabel hook 异常: %@", e.reason);
     }
 }
 
 %end
 
-#pragma mark - 「我」页右上角设置入口（保底入口）
+#pragma mark - hook UITextView
 
-%hook NewMainFrameViewController
+%hook UITextView
 
-- (void)viewDidLoad {
+- (void)didMoveToWindow {
     %orig;
-    if (objc_getAssociatedObject(self, "dv_mine_btn")) return;
-    objc_setAssociatedObject(self, "dv_mine_btn", @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-
-    UIBarButtonItem *item =
-        [[UIBarButtonItem alloc] initWithTitle:@"豆包"
-                                        style:UIBarButtonItemStylePlain
-                                       target:self
-                                       action:@selector(dv_openSettings)];
-    NSMutableArray *items = [self.navigationItem.rightBarButtonItems mutableCopy]
-        ?: [NSMutableArray array];
-    [items addObject:item];
-    self.navigationItem.rightBarButtonItems = items;
-}
-
-- (void)dv_openSettings {
-    [DVMenuController openSettingsFrom:self];
+    @try {
+        if (!self.window) return;
+        dv_attach_reader(self);
+    } @catch (NSException *e) {
+        NSLog(@"[豆包语音] UITextView hook 异常: %@", e.reason);
+    }
 }
 
 %end
 
-#pragma mark - 启动
+#pragma mark - 启动（不 hook 任何 UIViewController）
 
 %ctor {
     @autoreleasepool {
-        NSLog(@"[豆包语音] dylib 已注入 %@ (pid=%d) longPress=%d streamPlay=%d",
+        NSLog(@"[豆包语音] dylib 已注入 %@ (pid=%d) longPress=%d",
               [[NSBundle mainBundle] bundleIdentifier], getpid(),
-              (int)DVEnableLongPress(), (int)DVStreamPlay());
+              (int)DVEnableLongPress());
         [DVStore shared];
     }
 }
