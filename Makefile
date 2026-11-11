@@ -4,7 +4,7 @@ export THEOS_PACKAGE_SCHEME = rootless
 export TARGET_IPHONEOS_DEPLOYMENT_VERSION = 15.0
 
 TWEAK_NAME = DoubaoVoiceWeChat
-DoubaoVoiceWeChat_FILES = Tweak.xm Prefs/DVStore.m
+DoubaoVoiceWeChat_FILES = Tweak.xm Prefs/DVStore.m TTS/DVProtocol.m TTS/DVTextChunker.m
 DoubaoVoiceWeChat_FRAMEWORKS = UIKit Foundation AVFoundation CoreGraphics QuartzCore Security
 DoubaoVoiceWeChat_CFLAGS = -I$(THEOS_PROJECT_DIR) -fobjc-arc -Wno-deprecated-declarations -Wno-unused-variable
 DoubaoVoiceWeChat_LDFLAGS = -undefined dynamic_lookup
