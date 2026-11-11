@@ -73,6 +73,12 @@ static NSString *const kDVEndpoint = @"wss://openspeech.bytedance.com/api/v3/tts
     h[@"X-Control-Require-Usage-Tokens-Return"] = @"*";
 
     _player = [[DVAudioPlayer alloc] initWithSampleRate:(double)_sampleRate];
+    if (!_player) {
+        _active = NO;
+        [self fail:@"音频引擎初始化失败，设备可能不支持该采样率"];
+        return;
+    }
+
     __weak typeof(self) weakSelf = self;
     _player.onDrained = ^{
         __strong typeof(weakSelf) self = weakSelf;
